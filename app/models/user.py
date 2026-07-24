@@ -39,5 +39,15 @@ class User(db.Model):
         db.DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
     )
 
+    # Populated via app.models.role.user_roles; imported lazily inside the
+    # relationship string form so app/models/user.py doesn't need to import
+    # app/models/role.py directly (avoids a circular import between the two
+    # model modules, since role.py's Role.users relationship points back
+    # here).
+    roles = db.relationship("Role", secondary="user_roles", back_populates="users")
+
+    def has_role(self, role_name: str) -> bool:
+        return any(role.name == role_name for role in self.roles)
+
     def __repr__(self) -> str:  # pragma: no cover - debugging aid only
         return f"<User {self.email}>"
