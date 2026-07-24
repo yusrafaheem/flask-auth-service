@@ -11,6 +11,7 @@ import os
 from flask import Flask
 
 from app.config import Config, DevelopmentConfig, ProductionConfig, TestingConfig
+from app.extensions import db, limiter
 
 _CONFIGS = {
     "development": DevelopmentConfig,
@@ -24,5 +25,8 @@ def create_app(config_name: str | None = None) -> Flask:
 
     config_name = config_name or os.environ.get("FLASK_ENV", "development")
     app.config.from_object(_CONFIGS.get(config_name, Config))
+
+    db.init_app(app)
+    limiter.init_app(app)
 
     return app
