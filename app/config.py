@@ -30,6 +30,13 @@ class Config:
 
     RATELIMIT_STORAGE_URI = os.environ.get("RATELIMIT_STORAGE_URI", "memory://")
 
+    # The refresh-token cookie's Secure flag: browsers refuse to send a
+    # Secure cookie over plain HTTP, which is correct for production but
+    # would silently break refresh/logout during local development and in
+    # the test client (both run over HTTP). Defaults to secure; dev and
+    # testing configs below turn it off deliberately.
+    REFRESH_COOKIE_SECURE = os.environ.get("REFRESH_COOKIE_SECURE", "true").lower() == "true"
+
 
 class DevelopmentConfig(Config):
     DEBUG = True
@@ -37,6 +44,7 @@ class DevelopmentConfig(Config):
     # Never reused by ProductionConfig -- see the fail-fast check added
     # later in this file's history.
     SECRET_KEY = Config.SECRET_KEY or "dev-only-insecure-secret-key-do-not-deploy"
+    REFRESH_COOKIE_SECURE = False
 
 
 class TestingConfig(Config):
@@ -44,6 +52,7 @@ class TestingConfig(Config):
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
     SECRET_KEY = "testing-secret-key"
     RATELIMIT_ENABLED = False
+    REFRESH_COOKIE_SECURE = False
 
 
 class ProductionConfig(Config):
