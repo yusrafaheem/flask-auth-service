@@ -34,9 +34,21 @@ auth_bp = Blueprint("auth", __name__)
 INVALID_CREDENTIALS_MESSAGE = "Invalid email or password."
 ACCOUNT_LOCKED_MESSAGE = "Account temporarily locked due to repeated failed login attempts."
 
+# The refresh token now lives in an httpOnly cookie rather than the JSON
+# response body -- JavaScript in the browser can no longer read it (so a
+# successful XSS attack can't exfiltrate it), and it's automatically
+# replayed by the browser only to this cookie's Path, not attached to
+# every request the way a global cookie would be.
+REFRESH_COOKIE_NAME = "refresh_token"
+REFRESH_COOKIE_PATH = "/auth"
 
-def _issue_refresh_token(user_id: str) -> str:
+
+def _issue_refresh_token(user_id: str) -> tuple[str, int]:
     """Create a refresh token and persist its DB-backed revocation record.
+
+    Returns (token, ttl_seconds) -- the caller sets the cookie itself,
+    since only the caller knows whether it's building a fresh response
+    or attaching to one already in progress.
 
     Shared by /login and /refresh (refresh rotation issues a *new* refresh
     token alongside the new access token) so both call sites stay in sync
@@ -54,7 +66,23 @@ def _issue_refresh_token(user_id: str) -> str:
             expires_at=datetime.fromtimestamp(expires_at, tz=timezone.utc),
         )
     )
-    return refresh_token
+    return refresh_token, ttl_seconds
+
+
+def _set_refresh_cookie(response, token: str, max_age: int):
+    response.set_cookie(
+        REFRESH_COOKIE_NAME,
+        token,
+        max_age=max_age,
+        httponly=True,
+        secure=current_app.config["REFRESH_COOKIE_SECURE"],
+        samesite="Strict",
+        path=REFRESH_COOKIE_PATH,
+    )
+
+
+def _clear_refresh_cookie(response):
+    response.delete_cookie(REFRESH_COOKIE_NAME, path=REFRESH_COOKIE_PATH)
 
 
 @auth_bp.post("/register")
@@ -128,10 +156,12 @@ def login():
 
     secret_key = current_app.config["SECRET_KEY"]
     access_token = create_access_token(secret_key, user.id)
-    refresh_token = _issue_refresh_token(user.id)
+    refresh_token, ttl_seconds = _issue_refresh_token(user.id)
     db.session.commit()
 
-    return jsonify({"access_token": access_token, "refresh_token": refresh_token}), 200
+    response = jsonify({"access_token": access_token})
+    _set_refresh_cookie(response, refresh_token, ttl_seconds)
+    return response, 200
 
 
 @auth_bp.get("/me")
@@ -143,10 +173,9 @@ def me():
 
 @auth_bp.post("/refresh")
 def refresh():
-    body = request.get_json(silent=True) or {}
-    token = body.get("refresh_token")
+    token = request.cookies.get(REFRESH_COOKIE_NAME)
     if not token:
-        return jsonify({"error": "Missing refresh_token."}), 400
+        return jsonify({"error": "Missing refresh token cookie."}), 400
 
     secret_key = current_app.config["SECRET_KEY"]
     try:
@@ -173,18 +202,23 @@ def refresh():
     record.revoked_at = datetime.now(timezone.utc)
 
     access_token = create_access_token(secret_key, user.id)
-    new_refresh_token = _issue_refresh_token(user.id)
+    new_refresh_token, ttl_seconds = _issue_refresh_token(user.id)
     db.session.commit()
 
-    return jsonify({"access_token": access_token, "refresh_token": new_refresh_token}), 200
+    response = jsonify({"access_token": access_token})
+    _set_refresh_cookie(response, new_refresh_token, ttl_seconds)
+    return response, 200
 
 
 @auth_bp.post("/logout")
 def logout():
-    body = request.get_json(silent=True) or {}
-    token = body.get("refresh_token")
+    token = request.cookies.get(REFRESH_COOKIE_NAME)
+
+    response = jsonify({"message": "Logged out."})
+    _clear_refresh_cookie(response)
+
     if not token:
-        return jsonify({"error": "Missing refresh_token."}), 400
+        return response, 200
 
     secret_key = current_app.config["SECRET_KEY"]
     try:
@@ -193,11 +227,11 @@ def logout():
         # Logout is idempotent from the caller's point of view: an
         # already-invalid token still "successfully" logs out, since the
         # end state (no usable session) is the same either way.
-        return jsonify({"message": "Logged out."}), 200
+        return response, 200
 
     record = RefreshToken.query.filter_by(jti=payload["jti"]).first()
     if record is not None and record.revoked_at is None:
         record.revoked_at = datetime.now(timezone.utc)
         db.session.commit()
 
-    return jsonify({"message": "Logged out."}), 200
+    return response, 200
