@@ -14,6 +14,7 @@ from app.extensions import db, limiter
 from app.models.refresh_token import RefreshToken
 from app.models.user import User
 from app.schemas.auth_schemas import LoginSchema, RegisterSchema
+from app.security.csrf import CSRF_COOKIE_NAME, csrf_protect, generate_csrf_token
 from app.security.decorators import auth_required
 from app.security.lockout import is_locked, register_failed_attempt, register_successful_login
 from app.security.password_policy import PasswordPolicyError, validate_password_strength
@@ -83,6 +84,28 @@ def _set_refresh_cookie(response, token: str, max_age: int):
 
 def _clear_refresh_cookie(response):
     response.delete_cookie(REFRESH_COOKIE_NAME, path=REFRESH_COOKIE_PATH)
+
+
+def _set_csrf_cookie(response):
+    """Set a fresh, JS-readable CSRF token alongside the refresh cookie.
+
+    Deliberately NOT httponly (unlike the refresh cookie) -- the frontend
+    must be able to read this value with JavaScript to echo it back in
+    the X-CSRF-Token header. See app/security/csrf.py for why that's safe.
+    """
+    response.set_cookie(
+        CSRF_COOKIE_NAME,
+        generate_csrf_token(),
+        max_age=current_app.config["JWT_REFRESH_TOKEN_TTL_SECONDS"],
+        httponly=False,
+        secure=current_app.config["REFRESH_COOKIE_SECURE"],
+        samesite="Strict",
+        path=REFRESH_COOKIE_PATH,
+    )
+
+
+def _clear_csrf_cookie(response):
+    response.delete_cookie(CSRF_COOKIE_NAME, path=REFRESH_COOKIE_PATH)
 
 
 @auth_bp.post("/register")
@@ -161,6 +184,7 @@ def login():
 
     response = jsonify({"access_token": access_token})
     _set_refresh_cookie(response, refresh_token, ttl_seconds)
+    _set_csrf_cookie(response)
     return response, 200
 
 
@@ -172,6 +196,7 @@ def me():
 
 
 @auth_bp.post("/refresh")
+@csrf_protect
 def refresh():
     token = request.cookies.get(REFRESH_COOKIE_NAME)
     if not token:
@@ -207,15 +232,18 @@ def refresh():
 
     response = jsonify({"access_token": access_token})
     _set_refresh_cookie(response, new_refresh_token, ttl_seconds)
+    _set_csrf_cookie(response)
     return response, 200
 
 
 @auth_bp.post("/logout")
+@csrf_protect
 def logout():
     token = request.cookies.get(REFRESH_COOKIE_NAME)
 
     response = jsonify({"message": "Logged out."})
     _clear_refresh_cookie(response)
+    _clear_csrf_cookie(response)
 
     if not token:
         return response, 200
