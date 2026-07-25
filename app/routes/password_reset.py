@@ -12,7 +12,7 @@ without external services.
 from flask import Blueprint, current_app, jsonify, request
 from marshmallow import Schema, ValidationError, fields
 
-from app.extensions import db
+from app.extensions import db, limiter
 from app.models.user import User
 from app.security.password_policy import PasswordPolicyError, validate_password_strength
 from app.security.passwords import hash_password
@@ -31,6 +31,7 @@ class PasswordResetConfirmSchema(Schema):
 
 
 @password_reset_bp.post("/request")
+@limiter.limit("5 per hour")
 def request_reset():
     try:
         payload = PasswordResetRequestSchema().load(request.get_json(silent=True) or {})

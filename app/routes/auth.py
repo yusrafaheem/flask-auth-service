@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from flask import Blueprint, current_app, g, jsonify, request
 from marshmallow import ValidationError
 
-from app.extensions import db
+from app.extensions import db, limiter
 from app.models.refresh_token import RefreshToken
 from app.models.user import User
 from app.schemas.auth_schemas import LoginSchema, RegisterSchema
@@ -58,6 +58,7 @@ def _issue_refresh_token(user_id: str) -> str:
 
 
 @auth_bp.post("/register")
+@limiter.limit("10 per hour")
 def register():
     schema = RegisterSchema()
     try:
@@ -87,6 +88,7 @@ def register():
 
 
 @auth_bp.post("/login")
+@limiter.limit("10 per minute")
 def login():
     schema = LoginSchema()
     try:
