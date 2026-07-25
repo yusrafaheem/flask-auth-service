@@ -10,6 +10,7 @@ import os
 
 from flask import Flask
 
+from app.cli import register_cli
 from app.config import Config, DevelopmentConfig, ProductionConfig, TestingConfig
 from app.extensions import db, limiter
 
@@ -28,5 +29,7 @@ def create_app(config_name: str | None = None) -> Flask:
 
     db.init_app(app)
     limiter.init_app(app)
+
+    register_cli(app)
 
     return app
