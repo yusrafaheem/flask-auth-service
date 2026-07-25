@@ -17,7 +17,12 @@ from app.schemas.auth_schemas import LoginSchema, RegisterSchema
 from app.security.decorators import auth_required
 from app.security.password_policy import PasswordPolicyError, validate_password_strength
 from app.security.passwords import hash_password, verify_password
-from app.security.tokens import create_access_token, create_refresh_token
+from app.security.tokens import (
+    TokenError,
+    create_access_token,
+    create_refresh_token,
+    decode_refresh_token,
+)
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -26,6 +31,28 @@ auth_bp = Blueprint("auth", __name__)
 # distinct message for "no such user" vs "wrong password" would let an
 # attacker enumerate which emails have accounts on this service.
 INVALID_CREDENTIALS_MESSAGE = "Invalid email or password."
+
+
+def _issue_refresh_token(user_id: str) -> str:
+    """Create a refresh token and persist its DB-backed revocation record.
+
+    Shared by /login and /refresh (refresh rotation issues a *new* refresh
+    token alongside the new access token) so both call sites stay in sync
+    on how a refresh token's lifetime and revocation row get created.
+    """
+    secret_key = current_app.config["SECRET_KEY"]
+    refresh_token, jti = create_refresh_token(secret_key, user_id)
+
+    ttl_seconds = current_app.config["JWT_REFRESH_TOKEN_TTL_SECONDS"]
+    expires_at = datetime.now(timezone.utc).timestamp() + ttl_seconds
+    db.session.add(
+        RefreshToken(
+            jti=jti,
+            user_id=user_id,
+            expires_at=datetime.fromtimestamp(expires_at, tz=timezone.utc),
+        )
+    )
+    return refresh_token
 
 
 @auth_bp.post("/register")
@@ -86,17 +113,7 @@ def login():
 
     secret_key = current_app.config["SECRET_KEY"]
     access_token = create_access_token(secret_key, user.id)
-    refresh_token, jti = create_refresh_token(secret_key, user.id)
-
-    ttl_seconds = current_app.config["JWT_REFRESH_TOKEN_TTL_SECONDS"]
-    expires_at = datetime.now(timezone.utc).timestamp() + ttl_seconds
-    db.session.add(
-        RefreshToken(
-            jti=jti,
-            user_id=user.id,
-            expires_at=datetime.fromtimestamp(expires_at, tz=timezone.utc),
-        )
-    )
+    refresh_token = _issue_refresh_token(user.id)
     db.session.commit()
 
     return jsonify({"access_token": access_token, "refresh_token": refresh_token}), 200
@@ -107,3 +124,65 @@ def login():
 def me():
     user = g.current_user
     return jsonify({"id": user.id, "email": user.email}), 200
+
+
+@auth_bp.post("/refresh")
+def refresh():
+    body = request.get_json(silent=True) or {}
+    token = body.get("refresh_token")
+    if not token:
+        return jsonify({"error": "Missing refresh_token."}), 400
+
+    secret_key = current_app.config["SECRET_KEY"]
+    try:
+        payload = decode_refresh_token(secret_key, token)
+    except TokenError as err:
+        return jsonify({"error": str(err)}), 401
+
+    record = RefreshToken.query.filter_by(jti=payload["jti"]).first()
+    if record is None or not record.is_active:
+        # Covers both "never issued by us" and "already revoked/expired
+        # server-side" -- a cryptographically valid JWT whose DB row is
+        # gone or revoked must still be rejected; that's the whole point
+        # of backing refresh tokens with a DB row instead of trusting the
+        # JWT alone.
+        return jsonify({"error": "Refresh token has been revoked or is invalid."}), 401
+
+    user = User.query.get(payload["sub"])
+    if user is None or not user.is_active:
+        return jsonify({"error": "Refresh token has been revoked or is invalid."}), 401
+
+    # Rotate: revoke the presented refresh token and issue a brand new one,
+    # rather than reusing it. This limits the blast radius of a leaked
+    # refresh token to a single use before it stops working.
+    record.revoked_at = datetime.now(timezone.utc)
+
+    access_token = create_access_token(secret_key, user.id)
+    new_refresh_token = _issue_refresh_token(user.id)
+    db.session.commit()
+
+    return jsonify({"access_token": access_token, "refresh_token": new_refresh_token}), 200
+
+
+@auth_bp.post("/logout")
+def logout():
+    body = request.get_json(silent=True) or {}
+    token = body.get("refresh_token")
+    if not token:
+        return jsonify({"error": "Missing refresh_token."}), 400
+
+    secret_key = current_app.config["SECRET_KEY"]
+    try:
+        payload = decode_refresh_token(secret_key, token)
+    except TokenError:
+        # Logout is idempotent from the caller's point of view: an
+        # already-invalid token still "successfully" logs out, since the
+        # end state (no usable session) is the same either way.
+        return jsonify({"message": "Logged out."}), 200
+
+    record = RefreshToken.query.filter_by(jti=payload["jti"]).first()
+    if record is not None and record.revoked_at is None:
+        record.revoked_at = datetime.now(timezone.utc)
+        db.session.commit()
+
+    return jsonify({"message": "Logged out."}), 200
