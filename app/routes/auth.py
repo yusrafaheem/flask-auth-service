@@ -7,13 +7,14 @@ reviewed -- on its own.
 
 from datetime import datetime, timezone
 
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, current_app, g, jsonify, request
 from marshmallow import ValidationError
 
 from app.extensions import db
 from app.models.refresh_token import RefreshToken
 from app.models.user import User
 from app.schemas.auth_schemas import LoginSchema, RegisterSchema
+from app.security.decorators import auth_required
 from app.security.password_policy import PasswordPolicyError, validate_password_strength
 from app.security.passwords import hash_password, verify_password
 from app.security.tokens import create_access_token, create_refresh_token
@@ -99,3 +100,10 @@ def login():
     db.session.commit()
 
     return jsonify({"access_token": access_token, "refresh_token": refresh_token}), 200
+
+
+@auth_bp.get("/me")
+@auth_required
+def me():
+    user = g.current_user
+    return jsonify({"id": user.id, "email": user.email}), 200
