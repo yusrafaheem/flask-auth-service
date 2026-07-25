@@ -13,6 +13,7 @@ from flask import Flask
 from app.cli import register_cli
 from app.config import Config, DevelopmentConfig, ProductionConfig, TestingConfig
 from app.extensions import db, limiter
+from app.routes import register_blueprints
 
 _CONFIGS = {
     "development": DevelopmentConfig,
@@ -31,5 +32,6 @@ def create_app(config_name: str | None = None) -> Flask:
     limiter.init_app(app)
 
     register_cli(app)
+    register_blueprints(app)
 
     return app
