@@ -15,7 +15,7 @@ def _make_user(app, email="user@example.com", password="CorrectHorseBatteryStapl
         return user.id
 
 
-def test_login_with_correct_credentials_returns_tokens(client, app):
+def test_login_with_correct_credentials_returns_access_token_and_sets_refresh_cookie(client, app):
     _make_user(app)
 
     resp = client.post(
@@ -26,7 +26,10 @@ def test_login_with_correct_credentials_returns_tokens(client, app):
     assert resp.status_code == 200
     body = resp.get_json()
     assert "access_token" in body
-    assert "refresh_token" in body
+    # The refresh token no longer appears in the JSON body -- see
+    # test_cookie_refresh.py for the cookie-based flow itself.
+    assert "refresh_token" not in body
+    assert "refresh_token" in resp.headers.get("Set-Cookie", "")
 
 
 def test_login_persists_a_refresh_token_row(client, app):
