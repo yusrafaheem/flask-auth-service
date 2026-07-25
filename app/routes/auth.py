@@ -15,6 +15,7 @@ from app.models.refresh_token import RefreshToken
 from app.models.user import User
 from app.schemas.auth_schemas import LoginSchema, RegisterSchema
 from app.security.decorators import auth_required
+from app.security.lockout import is_locked, register_failed_attempt, register_successful_login
 from app.security.password_policy import PasswordPolicyError, validate_password_strength
 from app.security.passwords import hash_password, verify_password
 from app.security.tokens import (
@@ -31,6 +32,7 @@ auth_bp = Blueprint("auth", __name__)
 # distinct message for "no such user" vs "wrong password" would let an
 # attacker enumerate which emails have accounts on this service.
 INVALID_CREDENTIALS_MESSAGE = "Invalid email or password."
+ACCOUNT_LOCKED_MESSAGE = "Account temporarily locked due to repeated failed login attempts."
 
 
 def _issue_refresh_token(user_id: str) -> str:
@@ -101,6 +103,12 @@ def login():
 
     user = User.query.filter_by(email=email).first()
 
+    # Checked and returned before the password check (and before it can
+    # reset via a correct password) -- once locked, an account stays
+    # locked until locked_until passes, full stop.
+    if user is not None and is_locked(user):
+        return jsonify({"error": ACCOUNT_LOCKED_MESSAGE}), 423
+
     # Always run verify_password, even when no user was found, using a
     # hash-shaped dummy value. bcrypt's check is the slow part of this
     # function; skipping it for unknown emails would make "does this email
@@ -109,7 +117,12 @@ def login():
     password_ok = verify_password(password, user.password_hash if user else dummy_hash)
 
     if user is None or not password_ok or not user.is_active:
+        if user is not None and not password_ok:
+            register_failed_attempt(user)
+            db.session.commit()
         return jsonify({"error": INVALID_CREDENTIALS_MESSAGE}), 401
+
+    register_successful_login(user)
 
     secret_key = current_app.config["SECRET_KEY"]
     access_token = create_access_token(secret_key, user.id)
