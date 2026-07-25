@@ -1,8 +1,9 @@
-"""Route decorators for authentication (and, later, authorization).
+"""Route decorators for authentication and role-based authorization.
 
-`auth_required` is the only thing here for now; `roles_required` (RBAC)
-is added in a later, separate commit once the role model is wired up to
-routes.
+`roles_required` must be stacked *below* `auth_required` (i.e. closer to
+the view function) since it reads `g.current_user`, which `auth_required`
+is what sets. Stacked the other way around, `g.current_user` wouldn't
+exist yet when `roles_required` runs.
 """
 
 from functools import wraps
@@ -52,3 +53,22 @@ def auth_required(view):
         return view(*args, **kwargs)
 
     return wrapped
+
+
+def roles_required(*role_names: str):
+    """Require the authenticated user to have at least one of the given
+    roles. Must be used together with (and beneath) @auth_required, since
+    it relies on g.current_user already being set.
+    """
+
+    def decorator(view):
+        @wraps(view)
+        def wrapped(*args, **kwargs):
+            user = g.current_user
+            if not any(user.has_role(name) for name in role_names):
+                return jsonify({"error": "Forbidden: insufficient role."}), 403
+            return view(*args, **kwargs)
+
+        return wrapped
+
+    return decorator
