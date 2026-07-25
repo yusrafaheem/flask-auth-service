@@ -24,3 +24,47 @@ def register_cli(app):
 
         db.create_all()
         click.echo("Initialized the database.")
+
+    @app.cli.command("seed-admin")
+    @click.option("--email", required=True)
+    @click.option("--password", prompt=True, hide_input=True, confirmation_prompt=True)
+    def seed_admin(email, password):
+        """Create the 'admin' role (if missing) and an admin user.
+
+        Run manually, once, against a fresh database -- there is no
+        signup flow for admin accounts on purpose. Registration via
+        POST /auth/register always creates an ordinary, role-less user;
+        granting admin has to be a deliberate operator action, not
+        something reachable through the public API.
+        """
+        from app.models.role import Role
+        from app.models.user import User
+        from app.security.password_policy import PasswordPolicyError, validate_password_strength
+        from app.security.passwords import hash_password
+
+        email = email.lower()
+
+        try:
+            validate_password_strength(password)
+        except PasswordPolicyError as err:
+            for message in err.errors:
+                click.echo(f"Error: {message}", err=True)
+            raise SystemExit(1)
+
+        admin_role = Role.query.filter_by(name="admin").first()
+        if admin_role is None:
+            admin_role = Role(name="admin")
+            db.session.add(admin_role)
+
+        user = User.query.filter_by(email=email).first()
+        if user is None:
+            user = User(email=email, password_hash=hash_password(password))
+            db.session.add(user)
+        else:
+            user.password_hash = hash_password(password)
+
+        if admin_role not in user.roles:
+            user.roles.append(admin_role)
+
+        db.session.commit()
+        click.echo(f"Seeded admin user: {email}")
