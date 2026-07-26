@@ -11,7 +11,7 @@ import os
 from flask import Flask
 
 from app.cli import register_cli
-from app.config import Config, DevelopmentConfig, ProductionConfig, TestingConfig
+from app.config import Config, DevelopmentConfig, ProductionConfig, TestingConfig, validate_secret_key
 from app.errors import register_error_handlers
 from app.extensions import db, limiter
 from app.routes import register_blueprints
@@ -29,6 +29,11 @@ def create_app(config_name: str | None = None) -> Flask:
 
     config_name = config_name or os.environ.get("FLASK_ENV", "development")
     app.config.from_object(_CONFIGS.get(config_name, Config))
+
+    # Deliberately after from_object (so it sees the real, resolved
+    # SECRET_KEY) and before anything else touches the app -- if this
+    # raises, the process must not finish booting.
+    validate_secret_key(config_name, app.config.get("SECRET_KEY"))
 
     db.init_app(app)
     limiter.init_app(app)
