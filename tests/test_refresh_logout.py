@@ -74,11 +74,19 @@ def test_refresh_with_garbage_cookie_returns_401(client):
     the real one wins, so the request quietly succeeds instead of
     testing the garbage-token path. client.set_cookie() replaces the
     jar's value directly instead of fighting it with a second header.
+
+    Also needs path="/auth" here: the app scopes this cookie to that
+    path (see REFRESH_COOKIE_PATH in app/routes/auth.py), and Werkzeug's
+    jar treats a same-named cookie at a different path as a *second*,
+    separate cookie rather than an override -- without matching the
+    path, set_cookie() was silently adding a path="/" entry alongside
+    the real path="/auth" one instead of replacing it, so the real
+    cookie kept winning and the request still returned 200.
     """
     login_resp = _register_and_login(client)
     csrf_headers = _csrf_headers(login_resp)
 
-    client.set_cookie("refresh_token", "not-a-real-token")
+    client.set_cookie("refresh_token", "not-a-real-token", path="/auth")
     resp = client.post("/auth/refresh", headers=csrf_headers)
 
     assert resp.status_code == 401
@@ -91,8 +99,11 @@ def test_refresh_with_no_cookie_returns_400(client):
     # Valid CSRF pair, but no refresh_token cookie at all -- remove it
     # from the jar rather than trying to override it with an empty
     # "Cookie" header (see test_refresh_with_garbage_cookie_returns_401
-    # for why that doesn't reliably work).
-    client.delete_cookie("refresh_token")
+    # for why that doesn't reliably work). Must match path="/auth" too,
+    # for the same reason set_cookie() needs it above -- otherwise this
+    # deletes a path="/" cookie that was never there, leaving the real
+    # path="/auth" cookie untouched.
+    client.delete_cookie("refresh_token", path="/auth")
     resp = client.post("/auth/refresh", headers=csrf_headers)
 
     assert resp.status_code == 400
