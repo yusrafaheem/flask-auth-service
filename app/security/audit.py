@@ -28,9 +28,9 @@ EVENT_LOGIN_SUCCESS = "login_success"
 EVENT_LOGIN_FAILURE = "login_failure"
 EVENT_LOGIN_LOCKED_OUT = "login_locked_out"
 EVENT_LOGOUT = "logout"
-EVENT_TOKEN_REFRESH = "token_refresh"
-EVENT_PASSWORD_RESET_REQUESTED = "password_reset_requested"
-EVENT_PASSWORD_RESET_CONFIRMED = "password_reset_confirmed"
+EVENT_TOKEN_REFRESH = "token_refresh"  # nosec B105 - event-type label, not a credential
+EVENT_PASSWORD_RESET_REQUESTED = "password_reset_requested"  # nosec B105 - event-type label, not a credential
+EVENT_PASSWORD_RESET_CONFIRMED = "password_reset_confirmed"  # nosec B105 - event-type label, not a credential
 
 
 def record_event(
