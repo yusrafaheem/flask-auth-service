@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      # ruff covers both linting and import/style issues in one pass;
+      # failing the build here is cheap and catches most mistakes before
+      # the slower test/security jobs even start.
+      - run: ruff check .
+
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      # bandit: static analysis for common Python security antipatterns
+      # (e.g. eval, weak hashing, shell=True) in this project's own code.
+      - run: bandit -r app -x app/../tests
+      # pip-audit: checks every pinned dependency in requirements.txt
+      # against known-CVE databases -- a security-focused auth service
+      # is exactly the kind of project where a silently vulnerable
+      # dependency matters most.
+      - run: pip-audit -r requirements.txt
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      # SQLite in-memory (TestingConfig) needs no service container --
+      # the whole suite runs self-contained, no Postgres needed in CI.
+      - run: pytest --cov=app --cov-report=term-missing
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    steps:
+      - uses: actions/checkout@v4
+      # Build-only smoke test -- confirms the Dockerfile actually
+      # produces an image (catches a broken COPY path, a typo'd package
+      # name, etc.) without needing a running Postgres to push/deploy it.
+      - run: docker build -t flask-auth-service:ci .
