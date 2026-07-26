@@ -71,7 +71,7 @@ def test_refresh_csrf_check_runs_before_touching_the_refresh_token(client, app):
     so a bad CSRF pair should short-circuit before any RefreshToken row is
     read or written.
     """
-    login_resp = _register_and_login(client)
+    _register_and_login(client)
 
     client.post("/auth/refresh", headers={"X-CSRF-Token": "not-even-close"})
 

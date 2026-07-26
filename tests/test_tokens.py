@@ -5,8 +5,6 @@ JWT encode/decode checks, mirroring the manual verification already done
 via direct python execution while building this module.
 """
 
-import time
-
 import pytest
 
 from app.security.tokens import (
