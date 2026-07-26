@@ -68,24 +68,32 @@ def test_refresh_revokes_the_old_token_so_a_second_refresh_needs_the_new_csrf(cl
 
 
 def test_refresh_with_garbage_cookie_returns_401(client):
+    """A hand-crafted "Cookie" header here doesn't reliably override the
+    test client's own cookie jar (which already holds the real
+    refresh_token cookie login set) -- both end up on the request and
+    the real one wins, so the request quietly succeeds instead of
+    testing the garbage-token path. client.set_cookie() replaces the
+    jar's value directly instead of fighting it with a second header.
+    """
     login_resp = _register_and_login(client)
+    csrf_headers = _csrf_headers(login_resp)
 
-    resp = client.post(
-        "/auth/refresh",
-        headers={**_csrf_headers(login_resp), "Cookie": "refresh_token=not-a-real-token"},
-    )
+    client.set_cookie("refresh_token", "not-a-real-token")
+    resp = client.post("/auth/refresh", headers=csrf_headers)
 
     assert resp.status_code == 401
 
 
 def test_refresh_with_no_cookie_returns_400(client):
     login_resp = _register_and_login(client)
+    csrf_headers = _csrf_headers(login_resp)
 
-    # Valid CSRF pair, but no refresh_token cookie at all in this request.
-    resp = client.post(
-        "/auth/refresh",
-        headers={**_csrf_headers(login_resp), "Cookie": ""},
-    )
+    # Valid CSRF pair, but no refresh_token cookie at all -- remove it
+    # from the jar rather than trying to override it with an empty
+    # "Cookie" header (see test_refresh_with_garbage_cookie_returns_401
+    # for why that doesn't reliably work).
+    client.delete_cookie("refresh_token")
+    resp = client.post("/auth/refresh", headers=csrf_headers)
 
     assert resp.status_code == 400
 
