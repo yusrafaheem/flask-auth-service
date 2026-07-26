@@ -6,6 +6,13 @@ every other test file in this suite isn't accidentally rate-limited by
 looping over requests. To actually exercise rate limiting for real, this
 file builds its own app instance with limiting turned back on, rather
 than changing the shared fixture's behavior for everyone else.
+
+RATELIMIT_ENABLED must be passed in via create_app's config_overrides,
+not set on app.config after the fact -- Flask-Limiter reads that value
+during limiter.init_app() (called inside create_app) and fixes its
+storage backend accordingly at that point. Setting it afterward is too
+late to matter and previously left the limiter's storage uninitialized,
+crashing `limiter.reset()` below with `assert self._storage`.
 """
 
 import pytest
@@ -16,8 +23,7 @@ from app.extensions import db, limiter
 
 @pytest.fixture()
 def limited_client():
-    app = create_app("testing")
-    app.config["RATELIMIT_ENABLED"] = True
+    app = create_app("testing", config_overrides={"RATELIMIT_ENABLED": True})
 
     with app.app_context():
         from app import models  # noqa: F401
