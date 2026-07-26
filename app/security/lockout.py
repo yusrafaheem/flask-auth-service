@@ -13,8 +13,23 @@ MAX_FAILED_ATTEMPTS = 5
 LOCKOUT_DURATION = timedelta(minutes=15)
 
 
+def _as_aware_utc(dt: datetime) -> datetime:
+    """SQLite doesn't preserve tzinfo -- `locked_until` comes back naive
+    after a round trip through SQLite even though the column is declared
+    `DateTime(timezone=True)` (Postgres preserves it correctly). Every
+    datetime this app ever writes is already UTC, so treat a naive value
+    read back as UTC rather than crashing on the aware/naive comparison
+    below.
+    """
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 def is_locked(user) -> bool:
-    return user.locked_until is not None and user.locked_until > datetime.now(timezone.utc)
+    if user.locked_until is None:
+        return False
+    return _as_aware_utc(user.locked_until) > datetime.now(timezone.utc)
 
 
 def register_failed_attempt(user) -> None:
