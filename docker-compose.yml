@@ -1,0 +1,48 @@
+# Local/demo orchestration only -- there's no secrets manager wired up
+# here, so SECRET_KEY and POSTGRES_PASSWORD below are dev-only stand-ins
+# passed as plain environment variables. A real deployment would source
+# both from the platform's secret store, never from a committed compose
+# file.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: flask_auth
+      POSTGRES_PASSWORD: flask_auth_dev_password
+      POSTGRES_DB: flask_auth
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      # The app container's `depends_on: condition: service_healthy`
+      # below waits on this -- without it, the app can start and try to
+      # connect before Postgres has finished its own startup sequence.
+      test: ["CMD-SHELL", "pg_isready -U flask_auth"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      FLASK_ENV: production
+      DATABASE_URL: postgresql://flask_auth:flask_auth_dev_password@db:5432/flask_auth
+      # 32+ char dev-only key -- validate_secret_key (app/config.py)
+      # would refuse to boot with anything shorter or with the
+      # DevelopmentConfig default, even here.
+      SECRET_KEY: docker-compose-local-demo-secret-key-not-for-prod
+      REFRESH_COOKIE_SECURE: "false"
+    depends_on:
+      db:
+        condition: service_healthy
+    # Run schema creation before the server starts, every time -- safe
+    # to repeat, since init-db only creates tables that don't already
+    # exist (see app/cli.py's docstring on why this isn't a real
+    # migration tool).
+    command: sh -c "flask init-db && gunicorn --bind 0.0.0.0:8000 wsgi:app"
+
+volumes:
+  postgres_data:
