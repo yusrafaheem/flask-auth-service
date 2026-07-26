@@ -6,6 +6,8 @@ enough here because the relationship itself carries no extra data (no
 need to become a real association-object model instead.
 """
 
+import uuid
+
 from app.extensions import db
 
 user_roles = db.Table(
@@ -15,10 +17,22 @@ user_roles = db.Table(
 )
 
 
+def _uuid() -> str:
+    return str(uuid.uuid4())
+
+
 class Role(db.Model):
     __tablename__ = "roles"
 
-    id = db.Column(db.String(36), primary_key=True)
+    # `default=_uuid` was missing here -- every other model's String(36)
+    # primary key generates its own id (see User, RefreshToken,
+    # AuditLog), but this one didn't, so creating a Role without
+    # explicitly passing an id hit SQLite's NOT NULL constraint on
+    # roles.id. That includes `flask seed-admin` (app/cli.py), which
+    # also creates a bare `Role(name=...)` -- this was a real bug in
+    # both paths, only caught here because test_rbac.py was the first
+    # thing to actually exercise Role creation end-to-end.
+    id = db.Column(db.String(36), primary_key=True, default=_uuid)
     name = db.Column(db.String(50), unique=True, nullable=False)
 
     users = db.relationship("User", secondary=user_roles, back_populates="roles")
