@@ -50,7 +50,7 @@ class DevelopmentConfig(Config):
 class TestingConfig(Config):
     TESTING = True
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
-    SECRET_KEY = "testing-secret-key"
+    SECRET_KEY = "testing-secret-key"  # nosec B105 - fixed test-only value, not a real credential
     RATELIMIT_ENABLED = False
     REFRESH_COOKIE_SECURE = False
 
@@ -63,7 +63,7 @@ class ProductionConfig(Config):
 # canonical "known-bad" value so validate_secret_key can catch someone
 # copying it into a production .env by mistake, not just catching an
 # unset/empty key.
-_DEV_ONLY_SECRET_KEY = "dev-only-insecure-secret-key-do-not-deploy"
+_DEV_ONLY_SECRET_KEY = "dev-only-insecure-secret-key-do-not-deploy"  # nosec B105 - intentionally public placeholder, never a real secret
 
 # Below this length, even a random SECRET_KEY doesn't carry enough
 # entropy to resist offline brute-forcing of a forged JWT signature --
