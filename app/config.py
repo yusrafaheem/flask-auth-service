@@ -57,3 +57,47 @@ class TestingConfig(Config):
 
 class ProductionConfig(Config):
     DEBUG = False
+
+
+# The exact string DevelopmentConfig falls back to -- kept here as the
+# canonical "known-bad" value so validate_secret_key can catch someone
+# copying it into a production .env by mistake, not just catching an
+# unset/empty key.
+_DEV_ONLY_SECRET_KEY = "dev-only-insecure-secret-key-do-not-deploy"
+
+# Below this length, even a random SECRET_KEY doesn't carry enough
+# entropy to resist offline brute-forcing of a forged JWT signature --
+# 32 bytes (256 bits) comfortably exceeds what HS256 needs.
+_MIN_SECRET_KEY_LENGTH = 32
+
+
+def validate_secret_key(config_name: str, secret_key: str | None) -> None:
+    """Fail fast, at startup, rather than accepting a forgeable JWT
+    signing key in production.
+
+    Deliberately only enforced for config_name == "production" --
+    DevelopmentConfig's fixed fallback key and TestingConfig's fixed key
+    are both intentionally weak so a fresh clone and the test suite run
+    with zero setup. Raising here means a misconfigured production
+    deploy crashes on boot with a clear message, instead of silently
+    accepting requests it can't actually secure.
+    """
+    if config_name != "production":
+        return
+
+    if not secret_key:
+        raise RuntimeError(
+            "SECRET_KEY is not set. Refusing to start in production without one."
+        )
+
+    if secret_key == _DEV_ONLY_SECRET_KEY:
+        raise RuntimeError(
+            "SECRET_KEY is set to the development-only default. Refusing to "
+            "start in production with a publicly known key."
+        )
+
+    if len(secret_key) < _MIN_SECRET_KEY_LENGTH:
+        raise RuntimeError(
+            f"SECRET_KEY is too short ({len(secret_key)} chars). Refusing to "
+            f"start in production with fewer than {_MIN_SECRET_KEY_LENGTH} characters."
+        )
