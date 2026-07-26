@@ -12,6 +12,7 @@ from flask import Flask
 
 from app.cli import register_cli
 from app.config import Config, DevelopmentConfig, ProductionConfig, TestingConfig
+from app.errors import register_error_handlers
 from app.extensions import db, limiter
 from app.routes import register_blueprints
 from app.security.headers import apply_security_headers
@@ -34,6 +35,7 @@ def create_app(config_name: str | None = None) -> Flask:
 
     register_cli(app)
     register_blueprints(app)
+    register_error_handlers(app)
 
     # after_request hooks run on every response, including error responses
     # -- registered here (rather than per-blueprint) so a route added
