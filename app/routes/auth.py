@@ -14,6 +14,15 @@ from app.extensions import db, limiter
 from app.models.refresh_token import RefreshToken
 from app.models.user import User
 from app.schemas.auth_schemas import LoginSchema, RegisterSchema
+from app.security.audit import (
+    EVENT_LOGIN_FAILURE,
+    EVENT_LOGIN_LOCKED_OUT,
+    EVENT_LOGIN_SUCCESS,
+    EVENT_LOGOUT,
+    EVENT_REGISTER,
+    EVENT_TOKEN_REFRESH,
+    record_event,
+)
 from app.security.csrf import CSRF_COOKIE_NAME, csrf_protect, generate_csrf_token
 from app.security.decorators import auth_required
 from app.security.lockout import is_locked, register_failed_attempt, register_successful_login
@@ -133,6 +142,8 @@ def register():
 
     user = User(email=email, password_hash=hash_password(password))
     db.session.add(user)
+    db.session.flush()  # assigns user.id so the audit row can reference it
+    record_event(EVENT_REGISTER, user_id=user.id, email=user.email)
     db.session.commit()
 
     return jsonify({"id": user.id, "email": user.email}), 201
@@ -160,6 +171,8 @@ def login():
     # reset via a correct password) -- once locked, an account stays
     # locked until locked_until passes, full stop.
     if user is not None and is_locked(user):
+        record_event(EVENT_LOGIN_LOCKED_OUT, user_id=user.id, email=user.email)
+        db.session.commit()
         return jsonify({"error": ACCOUNT_LOCKED_MESSAGE}), 423
 
     # Always run verify_password, even when no user was found, using a
@@ -172,10 +185,19 @@ def login():
     if user is None or not password_ok or not user.is_active:
         if user is not None and not password_ok:
             register_failed_attempt(user)
+            record_event(EVENT_LOGIN_FAILURE, user_id=user.id, email=user.email)
+            db.session.commit()
+        else:
+            # Either an unknown email, or a correct password against a
+            # deactivated account -- either way, still worth an audit
+            # row (e.g. for spotting a credential-stuffing sweep), with
+            # a user_id attached whenever we do have a matching user.
+            record_event(EVENT_LOGIN_FAILURE, user_id=user.id if user else None, email=email)
             db.session.commit()
         return jsonify({"error": INVALID_CREDENTIALS_MESSAGE}), 401
 
     register_successful_login(user)
+    record_event(EVENT_LOGIN_SUCCESS, user_id=user.id, email=user.email)
 
     secret_key = current_app.config["SECRET_KEY"]
     access_token = create_access_token(secret_key, user.id)
@@ -228,6 +250,7 @@ def refresh():
 
     access_token = create_access_token(secret_key, user.id)
     new_refresh_token, ttl_seconds = _issue_refresh_token(user.id)
+    record_event(EVENT_TOKEN_REFRESH, user_id=user.id, email=user.email)
     db.session.commit()
 
     response = jsonify({"access_token": access_token})
@@ -260,6 +283,7 @@ def logout():
     record = RefreshToken.query.filter_by(jti=payload["jti"]).first()
     if record is not None and record.revoked_at is None:
         record.revoked_at = datetime.now(timezone.utc)
+        record_event(EVENT_LOGOUT, user_id=record.user_id)
         db.session.commit()
 
     return response, 200
