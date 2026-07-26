@@ -24,6 +24,23 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _as_aware_utc(dt: datetime) -> datetime:
+    """Normalize a datetime read back from the DB to be timezone-aware.
+
+    SQLite doesn't actually preserve tzinfo -- a column declared
+    `DateTime(timezone=True)` still comes back *naive* after a round
+    trip through SQLite (Postgres, used in the docker-compose setup,
+    does preserve it correctly). Comparing a naive value against
+    `datetime.now(timezone.utc)` raises TypeError rather than silently
+    doing the wrong thing, which is how this got caught. Every datetime
+    this app ever writes is already UTC, so a naive value read back is
+    always safe to assume is UTC.
+    """
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 class RefreshToken(db.Model):
     __tablename__ = "refresh_tokens"
 
@@ -38,7 +55,9 @@ class RefreshToken(db.Model):
 
     @property
     def is_active(self) -> bool:
-        return self.revoked_at is None and self.expires_at > _utcnow()
+        if self.revoked_at is not None:
+            return False
+        return _as_aware_utc(self.expires_at) > _utcnow()
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid only
         return f"<RefreshToken {self.jti} user={self.user_id}>"
