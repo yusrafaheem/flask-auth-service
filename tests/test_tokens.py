@@ -96,3 +96,11 @@ def test_reset_token_rejected_when_decoded_as_refresh():
 
     with pytest.raises(TokenError):
         decode_refresh_token(SECRET, token)
+
+
+def test_reset_token_matches_the_password_hash_it_was_issued_against():
+    password_hash = "hash-value-1"
+    token = create_reset_token(SECRET, user_id=1, password_hash=password_hash)
+    payload = decode_reset_token(SECRET, token)
+
+    assert reset_token_matches_password_hash(payload, password_hash)
