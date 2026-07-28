@@ -104,3 +104,16 @@ def test_reset_token_matches_the_password_hash_it_was_issued_against():
     payload = decode_reset_token(SECRET, token)
 
     assert reset_token_matches_password_hash(payload, password_hash)
+
+
+def test_reset_token_stops_matching_once_the_password_hash_changes():
+    # This is the mechanism that makes a reset token single-use without a
+    # separate revocation table: once the real password_hash column value
+    # changes (i.e. the reset actually completed), the fingerprint baked
+    # into any previously issued token no longer matches.
+    original_hash = "hash-value-1"
+    token = create_reset_token(SECRET, user_id=1, password_hash=original_hash)
+    payload = decode_reset_token(SECRET, token)
+
+    new_hash = "hash-value-2"
+    assert not reset_token_matches_password_hash(payload, new_hash)
