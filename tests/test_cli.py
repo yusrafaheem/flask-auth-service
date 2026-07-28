@@ -43,3 +43,11 @@ def test_init_db_prints_a_confirmation_message(runner, app):
     result = runner.invoke(args=["init-db"])
 
     assert "Initialized the database." in result.output
+
+def test_init_db_is_safe_to_run_twice(runner):
+    # create_all() only adds missing tables -- running it again against an
+    # already-initialized database (the `app` fixture already called
+    # db.create_all() before this test even starts) must not error.
+    result = runner.invoke(args=["init-db"])
+
+    assert result.exit_code == 0
