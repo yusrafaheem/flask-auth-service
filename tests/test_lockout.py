@@ -54,3 +54,25 @@ def test_successful_login_resets_failed_attempt_counter(client, app):
         user = User.query.filter_by(email=email).first()
         assert user.failed_login_attempts == 0
         assert user.locked_until is None
+
+
+# The tests below exercise app.security.lockout directly, unit-style,
+# against a minimal fake object -- the module only ever reads and writes
+# `failed_login_attempts` and `locked_until`, so a real database-backed
+# User (and the app/db fixtures a real one needs) isn't required just to
+# test the lockout logic itself. The tests above already cover the same
+# behavior end-to-end through POST /auth/login.
+
+
+class _FakeUser:
+    def __init__(self, failed_login_attempts=0, locked_until=None):
+        self.failed_login_attempts = failed_login_attempts
+        self.locked_until = locked_until
+
+
+def test_is_locked_returns_false_when_locked_until_is_none():
+    from app.security.lockout import is_locked
+
+    user = _FakeUser(locked_until=None)
+
+    assert is_locked(user) is False
