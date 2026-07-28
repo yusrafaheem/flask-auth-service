@@ -121,3 +121,17 @@ def test_register_failed_attempt_does_not_lock_below_the_threshold():
 
     assert user.failed_login_attempts == MAX_FAILED_ATTEMPTS - 1
     assert user.locked_until is None
+
+
+def test_register_failed_attempt_locks_the_account_exactly_at_the_threshold():
+    from datetime import datetime, timezone
+
+    from app.security.lockout import register_failed_attempt
+
+    user = _FakeUser(failed_login_attempts=MAX_FAILED_ATTEMPTS - 1)
+
+    register_failed_attempt(user)
+
+    assert user.failed_login_attempts == MAX_FAILED_ATTEMPTS
+    assert user.locked_until is not None
+    assert user.locked_until > datetime.now(timezone.utc)
