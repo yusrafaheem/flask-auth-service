@@ -124,3 +124,14 @@ def test_seed_admin_rejects_a_weak_password(runner):
     )
 
     assert result.exit_code == 1
+
+def test_seed_admin_does_not_create_a_user_when_the_password_is_weak(runner, app):
+    runner.invoke(
+        args=["seed-admin", "--email", "weak2@example.com"],
+        input="weak\nweak\n",
+    )
+
+    with app.app_context():
+        from app.models.user import User
+
+        assert User.query.filter_by(email="weak2@example.com").first() is None
