@@ -51,3 +51,17 @@ def test_init_db_is_safe_to_run_twice(runner):
     result = runner.invoke(args=["init-db"])
 
     assert result.exit_code == 0
+
+def test_seed_admin_creates_admin_role_and_user(runner, app):
+    result = runner.invoke(
+        args=["seed-admin", "--email", "root@example.com"],
+        input=f"{GOOD_PASSWORD}\n{GOOD_PASSWORD}\n",
+    )
+
+    assert result.exit_code == 0
+    with app.app_context():
+        from app.models.user import User
+
+        user = User.query.filter_by(email="root@example.com").first()
+        assert user is not None
+        assert user.has_role("admin")
