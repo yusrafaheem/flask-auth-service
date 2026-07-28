@@ -11,8 +11,11 @@ from app.security.tokens import (
     TokenError,
     create_access_token,
     create_refresh_token,
+    create_reset_token,
     decode_access_token,
     decode_refresh_token,
+    decode_reset_token,
+    reset_token_matches_password_hash,
 )
 
 SECRET = "test-secret-key"
@@ -70,3 +73,12 @@ def test_different_users_get_different_jtis():
     # Two tokens for the same user still get distinct jtis -- each login
     # session needs its own revocable identity, even for the same user.
     assert jti1 != jti2
+
+
+def test_reset_token_round_trips_and_carries_a_hash_fingerprint():
+    token = create_reset_token(SECRET, user_id=1, password_hash="hash-value-1")
+    payload = decode_reset_token(SECRET, token)
+
+    assert payload["sub"] == "1"
+    assert payload["type"] == "reset"
+    assert "pwh" in payload
