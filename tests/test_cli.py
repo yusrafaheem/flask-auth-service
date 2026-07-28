@@ -35,3 +35,11 @@ def test_init_db_creates_roles_table(runner, app):
         from app.models.role import Role
 
         assert Role.query.count() == 0
+
+def test_init_db_prints_a_confirmation_message(runner, app):
+    with app.app_context():
+        db.drop_all()
+
+    result = runner.invoke(args=["init-db"])
+
+    assert "Initialized the database." in result.output
