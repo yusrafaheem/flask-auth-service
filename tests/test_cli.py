@@ -83,3 +83,25 @@ def test_seed_admin_reuses_the_existing_admin_role_instead_of_duplicating_it(run
         # "admin" role row, not one per run (see Role.id's default=_uuid
         # fix -- this is the exact code path that bug lived in).
         assert Role.query.filter_by(name="admin").count() == 1
+
+def test_seed_admin_grants_the_role_to_an_existing_user_and_updates_their_password(runner, app):
+    with app.app_context():
+        from app.models.user import User
+        from app.security.passwords import hash_password
+
+        user = User(email="existing@example.com", password_hash=hash_password("OldPassw0rd!"))
+        db.session.add(user)
+        db.session.commit()
+
+    runner.invoke(
+        args=["seed-admin", "--email", "existing@example.com"],
+        input=f"{GOOD_PASSWORD}\n{GOOD_PASSWORD}\n",
+    )
+
+    with app.app_context():
+        from app.models.user import User
+        from app.security.passwords import verify_password
+
+        user = User.query.filter_by(email="existing@example.com").first()
+        assert user.has_role("admin")
+        assert verify_password(GOOD_PASSWORD, user.password_hash)
