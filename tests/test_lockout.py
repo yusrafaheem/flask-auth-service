@@ -86,3 +86,13 @@ def test_is_locked_returns_true_when_locked_until_is_in_the_future():
     user = _FakeUser(locked_until=datetime.now(timezone.utc) + timedelta(minutes=5))
 
     assert is_locked(user) is True
+
+
+def test_is_locked_returns_false_once_the_lockout_window_has_passed():
+    from datetime import datetime, timedelta, timezone
+
+    from app.security.lockout import is_locked
+
+    user = _FakeUser(locked_until=datetime.now(timezone.utc) - timedelta(seconds=1))
+
+    assert is_locked(user) is False
