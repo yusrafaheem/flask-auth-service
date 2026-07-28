@@ -110,3 +110,14 @@ def test_is_locked_treats_a_naive_locked_until_as_utc():
     user = _FakeUser(locked_until=naive_future)
 
     assert is_locked(user) is True
+
+
+def test_register_failed_attempt_does_not_lock_below_the_threshold():
+    from app.security.lockout import register_failed_attempt
+
+    user = _FakeUser(failed_login_attempts=MAX_FAILED_ATTEMPTS - 2)
+
+    register_failed_attempt(user)
+
+    assert user.failed_login_attempts == MAX_FAILED_ATTEMPTS - 1
+    assert user.locked_until is None
