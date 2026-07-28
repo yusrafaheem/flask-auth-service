@@ -76,3 +76,13 @@ def test_is_locked_returns_false_when_locked_until_is_none():
     user = _FakeUser(locked_until=None)
 
     assert is_locked(user) is False
+
+
+def test_is_locked_returns_true_when_locked_until_is_in_the_future():
+    from datetime import datetime, timedelta, timezone
+
+    from app.security.lockout import is_locked
+
+    user = _FakeUser(locked_until=datetime.now(timezone.utc) + timedelta(minutes=5))
+
+    assert is_locked(user) is True
