@@ -23,3 +23,15 @@ def test_init_db_creates_users_table(runner, app):
 
         # Querying doesn't raise -- the table exists (and is empty).
         assert User.query.count() == 0
+
+def test_init_db_creates_roles_table(runner, app):
+    with app.app_context():
+        db.drop_all()
+
+    result = runner.invoke(args=["init-db"])
+
+    assert result.exit_code == 0
+    with app.app_context():
+        from app.models.role import Role
+
+        assert Role.query.count() == 0
