@@ -116,3 +116,11 @@ def test_seed_admin_lowercases_the_email(runner, app):
         from app.models.user import User
 
         assert User.query.filter_by(email="mixedcase@example.com").first() is not None
+
+def test_seed_admin_rejects_a_weak_password(runner):
+    result = runner.invoke(
+        args=["seed-admin", "--email", "weak@example.com"],
+        input="weak\nweak\n",
+    )
+
+    assert result.exit_code == 1
