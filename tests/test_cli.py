@@ -105,3 +105,14 @@ def test_seed_admin_grants_the_role_to_an_existing_user_and_updates_their_passwo
         user = User.query.filter_by(email="existing@example.com").first()
         assert user.has_role("admin")
         assert verify_password(GOOD_PASSWORD, user.password_hash)
+
+def test_seed_admin_lowercases_the_email(runner, app):
+    runner.invoke(
+        args=["seed-admin", "--email", "MixedCase@Example.COM"],
+        input=f"{GOOD_PASSWORD}\n{GOOD_PASSWORD}\n",
+    )
+
+    with app.app_context():
+        from app.models.user import User
+
+        assert User.query.filter_by(email="mixedcase@example.com").first() is not None
