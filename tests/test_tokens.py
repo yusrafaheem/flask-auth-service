@@ -82,3 +82,10 @@ def test_reset_token_round_trips_and_carries_a_hash_fingerprint():
     assert payload["sub"] == "1"
     assert payload["type"] == "reset"
     assert "pwh" in payload
+
+
+def test_reset_token_rejected_when_decoded_as_access():
+    token = create_reset_token(SECRET, user_id=1, password_hash="hash-value-1")
+
+    with pytest.raises(TokenError):
+        decode_access_token(SECRET, token)
