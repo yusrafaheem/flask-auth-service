@@ -96,3 +96,17 @@ def test_is_locked_returns_false_once_the_lockout_window_has_passed():
     user = _FakeUser(locked_until=datetime.now(timezone.utc) - timedelta(seconds=1))
 
     assert is_locked(user) is False
+
+
+def test_is_locked_treats_a_naive_locked_until_as_utc():
+    from datetime import datetime, timedelta, timezone
+
+    from app.security.lockout import is_locked
+
+    # SQLite doesn't preserve tzinfo on round trip (see _as_aware_utc's
+    # docstring in app/security/lockout.py) -- a naive datetime here must
+    # still compare correctly instead of raising or silently misbehaving.
+    naive_future = (datetime.now(timezone.utc) + timedelta(minutes=5)).replace(tzinfo=None)
+    user = _FakeUser(locked_until=naive_future)
+
+    assert is_locked(user) is True
