@@ -65,3 +65,21 @@ def test_seed_admin_creates_admin_role_and_user(runner, app):
         user = User.query.filter_by(email="root@example.com").first()
         assert user is not None
         assert user.has_role("admin")
+
+def test_seed_admin_reuses_the_existing_admin_role_instead_of_duplicating_it(runner, app):
+    runner.invoke(
+        args=["seed-admin", "--email", "root1@example.com"],
+        input=f"{GOOD_PASSWORD}\n{GOOD_PASSWORD}\n",
+    )
+    runner.invoke(
+        args=["seed-admin", "--email", "root2@example.com"],
+        input=f"{GOOD_PASSWORD}\n{GOOD_PASSWORD}\n",
+    )
+
+    with app.app_context():
+        from app.models.role import Role
+
+        # Two seed-admin runs, two different users -- still exactly one
+        # "admin" role row, not one per run (see Role.id's default=_uuid
+        # fix -- this is the exact code path that bug lived in).
+        assert Role.query.filter_by(name="admin").count() == 1
