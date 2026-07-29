@@ -93,3 +93,9 @@ def test_me_rejects_a_deactivated_user(client, app):
     resp = client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
 
     assert resp.status_code == 401
+
+
+def test_me_with_bearer_prefix_but_empty_token_returns_401(client):
+    resp = client.get("/auth/me", headers={"Authorization": "Bearer "})
+
+    assert resp.status_code == 401
