@@ -73,3 +73,15 @@ def test_login_schema_rejects_empty_password():
         LoginSchema().load({"email": "user@example.com", "password": ""})
 
     assert "password" in exc_info.value.messages
+
+
+def test_register_schema_rejects_unknown_fields():
+    # marshmallow's default unknown-field policy is RAISE -- a stray field
+    # (e.g. a client accidentally sending "is_admin": true) must fail
+    # validation rather than being silently dropped or accepted.
+    with pytest.raises(ValidationError) as exc_info:
+        RegisterSchema().load(
+            {"email": "user@example.com", "password": "whatever", "is_admin": True}
+        )
+
+    assert "is_admin" in exc_info.value.messages
