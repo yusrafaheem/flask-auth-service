@@ -98,3 +98,25 @@ def _extract_cookie_value(response, cookie_name):
 def _register_and_login(client, email="audit@example.com", password="CorrectHorseBatteryStaple9!"):
     client.post("/auth/register", json={"email": email, "password": password})
     return client.post("/auth/login", json={"email": email, "password": password})
+
+
+def test_locked_out_login_attempt_writes_an_audit_row(client, app):
+    from app.security.lockout import MAX_FAILED_ATTEMPTS
+
+    _register(client, email="lockout-audit@example.com")
+    for _ in range(MAX_FAILED_ATTEMPTS):
+        client.post(
+            "/auth/login",
+            json={"email": "lockout-audit@example.com", "password": "WrongPassword9!"},
+        )
+
+    # The account is now locked -- one more attempt (even with the right
+    # password) should log a distinct "login_locked_out" event rather than
+    # another "login_failure".
+    client.post(
+        "/auth/login",
+        json={"email": "lockout-audit@example.com", "password": "CorrectHorseBatteryStaple9!"},
+    )
+
+    rows = _events(app, "login_locked_out")
+    assert len(rows) == 1
