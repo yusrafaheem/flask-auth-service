@@ -43,3 +43,11 @@ def test_csrf_token_is_valid_returns_false_when_header_is_missing(app):
 def test_csrf_token_is_valid_returns_false_when_cookie_is_missing(app):
     with app.test_request_context(headers={CSRF_HEADER_NAME: "some-value"}):
         assert csrf_token_is_valid() is False
+
+
+def test_csrf_token_is_valid_returns_false_when_values_mismatch(app):
+    with app.test_request_context(
+        headers={CSRF_HEADER_NAME: "header-value"},
+        environ_base={"HTTP_COOKIE": f"{CSRF_COOKIE_NAME}=different-cookie-value"},
+    ):
+        assert csrf_token_is_valid() is False
