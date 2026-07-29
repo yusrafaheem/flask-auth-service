@@ -31,3 +31,10 @@ def test_csrf_token_is_valid_returns_true_when_cookie_and_header_match(app):
         environ_base={"HTTP_COOKIE": f"{CSRF_COOKIE_NAME}=matching-value"},
     ):
         assert csrf_token_is_valid() is True
+
+
+def test_csrf_token_is_valid_returns_false_when_header_is_missing(app):
+    with app.test_request_context(
+        environ_base={"HTTP_COOKIE": f"{CSRF_COOKIE_NAME}=some-value"},
+    ):
+        assert csrf_token_is_valid() is False
