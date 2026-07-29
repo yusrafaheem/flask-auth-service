@@ -80,3 +80,13 @@ def test_password_one_character_below_minimum_length_is_rejected():
         validate_password_strength(nine_char_password)
 
     assert any("at least" in msg for msg in exc_info.value.errors)
+
+
+def test_common_password_check_is_case_insensitive():
+    with pytest.raises(PasswordPolicyError) as exc_info:
+        # "PASSWORD123" differs only in case from the COMMON_PASSWORDS entry
+        # "password123" -- the check lowercases before comparing, so this
+        # must still be caught (even though it also fails other rules).
+        validate_password_strength("PASSWORD123")
+
+    assert any("common" in msg for msg in exc_info.value.errors)
