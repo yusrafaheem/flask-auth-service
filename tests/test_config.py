@@ -52,3 +52,8 @@ def test_secret_key_of_exactly_the_minimum_length_passes():
     # 32 characters is the boundary itself (_MIN_SECRET_KEY_LENGTH) -- must
     # pass, not just anything strictly longer.
     validate_secret_key("production", "x" * 32)
+
+
+def test_secret_key_one_character_below_minimum_fails():
+    with pytest.raises(RuntimeError, match="too short"):
+        validate_secret_key("production", "x" * 31)
