@@ -101,3 +101,19 @@ def test_confirm_rejects_weak_new_password(client):
     )
 
     assert resp.status_code == 400
+
+
+def test_request_for_a_deactivated_user_returns_same_shape_without_a_token(client, app):
+    email, _password = _register(client, email="deactivated-reset@example.com")
+
+    with app.app_context():
+        from app.extensions import db
+
+        user = User.query.filter_by(email=email).first()
+        user.is_active = False
+        db.session.commit()
+
+    resp = client.post("/auth/password-reset/request", json={"email": email})
+
+    assert resp.status_code == 200
+    assert "reset_token" not in resp.get_json()
