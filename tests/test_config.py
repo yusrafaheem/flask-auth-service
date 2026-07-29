@@ -46,3 +46,9 @@ def test_weak_secret_key_is_allowed_outside_production():
     validate_secret_key("development", "dev-only-insecure-secret-key-do-not-deploy")
     validate_secret_key("testing", "testing-secret-key")
     validate_secret_key("development", None)
+
+
+def test_secret_key_of_exactly_the_minimum_length_passes():
+    # 32 characters is the boundary itself (_MIN_SECRET_KEY_LENGTH) -- must
+    # pass, not just anything strictly longer.
+    validate_secret_key("production", "x" * 32)
