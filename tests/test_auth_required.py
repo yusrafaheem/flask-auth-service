@@ -77,3 +77,19 @@ def test_me_with_tampered_token_returns_401(client, app):
     resp = client.get("/auth/me", headers={"Authorization": f"Bearer {tampered}"})
 
     assert resp.status_code == 401
+
+
+def test_me_rejects_a_deactivated_user(client, app):
+    user_id = _make_user(app)
+
+    with app.app_context():
+        from app.extensions import db
+
+        user = User.query.get(user_id)
+        user.is_active = False
+        db.session.commit()
+        token = create_access_token(app.config["SECRET_KEY"], user_id)
+
+    resp = client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
+
+    assert resp.status_code == 401
