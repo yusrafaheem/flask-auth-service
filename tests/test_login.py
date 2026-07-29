@@ -98,3 +98,21 @@ def test_login_lowercases_email_before_lookup(client, app):
     )
 
     assert resp.status_code == 200
+
+
+def test_login_rejects_a_deactivated_user_even_with_correct_password(client, app):
+    user_id = _make_user(app, email="deactivated@example.com")
+
+    with app.app_context():
+        from app.extensions import db
+
+        user = User.query.get(user_id)
+        user.is_active = False
+        db.session.commit()
+
+    resp = client.post(
+        "/auth/login",
+        json={"email": "deactivated@example.com", "password": "CorrectHorseBatteryStaple9!"},
+    )
+
+    assert resp.status_code == 401
