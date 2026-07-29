@@ -65,3 +65,12 @@ def test_headers_present_on_get_requests_too(client):
     resp = client.get("/auth/me")
 
     assert resp.headers.get("X-Content-Type-Options") == "nosniff"
+
+
+def test_response_disables_legacy_xss_filter(client):
+    resp = client.post("/auth/register", json={"email": "not-an-email", "password": "x"})
+
+    # Modern browsers' CSP supersedes the old XSS auditor, which itself had
+    # exploitable bugs -- "0" explicitly disables it rather than leaving it
+    # in its (browser-dependent) default state.
+    assert resp.headers.get("X-XSS-Protection") == "0"
