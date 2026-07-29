@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.security.password_policy import PasswordPolicyError, validate_password_strength
+from app.security.password_policy import MIN_LENGTH, PasswordPolicyError, validate_password_strength
 
 
 def test_strong_password_passes():
@@ -63,3 +63,10 @@ def test_multiple_violations_are_all_reported_at_once():
     # Short, no uppercase, no digit, no special char -- expect several messages,
     # not just the first one found.
     assert len(exc_info.value.errors) >= 3
+
+
+def test_password_at_exactly_the_minimum_length_passes():
+    ten_char_password = "Abcdefg9!!"
+    assert len(ten_char_password) == MIN_LENGTH
+
+    validate_password_strength(ten_char_password)  # should not raise
