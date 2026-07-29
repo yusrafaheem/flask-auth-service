@@ -70,3 +70,17 @@ def test_register_rejects_missing_body(client):
     resp = client.post("/auth/register")
 
     assert resp.status_code == 400
+
+
+def test_register_rejects_duplicate_email_case_insensitively(client):
+    client.post(
+        "/auth/register",
+        json={"email": "CaseDupe@Example.com", "password": "CorrectHorseBatteryStaple9!"},
+    )
+
+    resp = client.post(
+        "/auth/register",
+        json={"email": "casedupe@example.com", "password": "AnotherPassword9!"},
+    )
+
+    assert resp.status_code == 409
