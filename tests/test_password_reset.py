@@ -134,3 +134,22 @@ def test_confirm_rejects_an_access_token_used_as_the_reset_token(client, app):
     )
 
     assert resp.status_code == 400
+
+
+def test_confirm_rejects_a_reset_token_for_a_deleted_user(client, app):
+    email, _password = _register(client, email="deleted-user@example.com")
+    reset_resp = client.post("/auth/password-reset/request", json={"email": email})
+    token = reset_resp.get_json()["reset_token"]
+
+    with app.app_context():
+        from app.extensions import db
+
+        db.session.delete(User.query.filter_by(email=email).first())
+        db.session.commit()
+
+    resp = client.post(
+        "/auth/password-reset/confirm",
+        json={"token": token, "new_password": "BrandNewPassword9!"},
+    )
+
+    assert resp.status_code == 400
