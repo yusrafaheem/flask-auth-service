@@ -63,3 +63,10 @@ def test_refresh_cookie_not_readable_from_json_response_body(client):
     # The whole point of the cookie migration: the token must not be
     # duplicated into a place JavaScript can read it.
     assert "refresh_token" not in resp.get_json()
+
+
+def test_refresh_cookie_max_age_matches_the_configured_ttl(client, app):
+    resp = _login(client)
+
+    ttl = app.config["JWT_REFRESH_TOKEN_TTL_SECONDS"]
+    assert f"Max-Age={ttl}" in resp.headers.get("Set-Cookie", "")
