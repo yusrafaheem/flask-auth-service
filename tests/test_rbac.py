@@ -73,3 +73,12 @@ def test_admin_endpoint_does_not_leak_password_hashes(client, app):
     body_text = resp.get_data(as_text=True)
     assert "password_hash" not in body_text
     assert "$2b$" not in body_text  # bcrypt hash prefix must never appear
+
+
+def test_admin_endpoint_rejects_wrong_http_method(client, app):
+    user_id = _make_user(app, "admin5@example.com", roles=("admin",))
+    token = _token_for(app, user_id)
+
+    resp = client.post("/admin/users", headers={"Authorization": f"Bearer {token}"})
+
+    assert resp.status_code == 405
