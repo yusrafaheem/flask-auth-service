@@ -82,3 +82,14 @@ def test_admin_endpoint_rejects_wrong_http_method(client, app):
     resp = client.post("/admin/users", headers={"Authorization": f"Bearer {token}"})
 
     assert resp.status_code == 405
+
+
+def test_admin_endpoint_lists_users_in_creation_order(client, app):
+    _make_user(app, "first-created@example.com", roles=())
+    user_id = _make_user(app, "second-created@example.com", roles=("admin",))
+    token = _token_for(app, user_id)
+
+    resp = client.get("/admin/users", headers={"Authorization": f"Bearer {token}"})
+
+    emails = [u["email"] for u in resp.get_json()]
+    assert emails.index("first-created@example.com") < emails.index("second-created@example.com")
