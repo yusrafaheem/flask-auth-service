@@ -120,3 +120,13 @@ def test_locked_out_login_attempt_writes_an_audit_row(client, app):
 
     rows = _events(app, "login_locked_out")
     assert len(rows) == 1
+
+
+def test_token_refresh_writes_an_audit_row(client, app):
+    login_resp = _register_and_login(client, email="refresh-audit@example.com")
+    csrf = _extract_cookie_value(login_resp, "csrf_token")
+
+    client.post("/auth/refresh", headers={"X-CSRF-Token": csrf})
+
+    rows = _events(app, "token_refresh")
+    assert len(rows) == 1
