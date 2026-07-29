@@ -45,3 +45,10 @@ def test_login_schema_rejects_missing_email():
         LoginSchema().load({"password": "whatever"})
 
     assert "email" in exc_info.value.messages
+
+
+def test_register_schema_rejects_missing_email():
+    with pytest.raises(ValidationError) as exc_info:
+        RegisterSchema().load({"password": "whatever"})
+
+    assert "email" in exc_info.value.messages
