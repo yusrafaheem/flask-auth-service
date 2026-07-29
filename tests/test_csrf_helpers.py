@@ -23,3 +23,11 @@ def test_generate_csrf_token_returns_a_string():
 
 def test_generate_csrf_token_produces_unique_values():
     assert generate_csrf_token() != generate_csrf_token()
+
+
+def test_csrf_token_is_valid_returns_true_when_cookie_and_header_match(app):
+    with app.test_request_context(
+        headers={CSRF_HEADER_NAME: "matching-value"},
+        environ_base={"HTTP_COOKIE": f"{CSRF_COOKIE_NAME}=matching-value"},
+    ):
+        assert csrf_token_is_valid() is True
