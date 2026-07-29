@@ -19,3 +19,7 @@ def test_generate_csrf_token_returns_a_string():
 
     assert isinstance(token, str)
     assert len(token) > 20
+
+
+def test_generate_csrf_token_produces_unique_values():
+    assert generate_csrf_token() != generate_csrf_token()
