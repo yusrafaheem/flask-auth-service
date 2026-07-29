@@ -87,3 +87,14 @@ def test_login_rejects_missing_body(client):
     resp = client.post("/auth/login")
 
     assert resp.status_code == 401
+
+
+def test_login_lowercases_email_before_lookup(client, app):
+    _make_user(app, email="mixedcase@example.com")
+
+    resp = client.post(
+        "/auth/login",
+        json={"email": "MixedCase@Example.com", "password": "CorrectHorseBatteryStaple9!"},
+    )
+
+    assert resp.status_code == 200
