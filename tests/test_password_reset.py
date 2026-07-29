@@ -117,3 +117,20 @@ def test_request_for_a_deactivated_user_returns_same_shape_without_a_token(clien
 
     assert resp.status_code == 200
     assert "reset_token" not in resp.get_json()
+
+
+def test_confirm_rejects_an_access_token_used_as_the_reset_token(client, app):
+    from app.security.tokens import create_access_token
+
+    email, _password = _register(client, email="typeconfusion@example.com")
+
+    with app.app_context():
+        user = User.query.filter_by(email=email).first()
+        access_token = create_access_token(app.config["SECRET_KEY"], user.id)
+
+    resp = client.post(
+        "/auth/password-reset/confirm",
+        json={"token": access_token, "new_password": "BrandNewPassword9!"},
+    )
+
+    assert resp.status_code == 400
