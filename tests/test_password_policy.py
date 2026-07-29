@@ -70,3 +70,13 @@ def test_password_at_exactly_the_minimum_length_passes():
     assert len(ten_char_password) == MIN_LENGTH
 
     validate_password_strength(ten_char_password)  # should not raise
+
+
+def test_password_one_character_below_minimum_length_is_rejected():
+    nine_char_password = "Abcdefg9!"
+    assert len(nine_char_password) == MIN_LENGTH - 1
+
+    with pytest.raises(PasswordPolicyError) as exc_info:
+        validate_password_strength(nine_char_password)
+
+    assert any("at least" in msg for msg in exc_info.value.errors)
